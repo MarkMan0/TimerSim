@@ -140,14 +140,10 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="RingBuffer.h" />
-    <ClInclude Include="Planner.h" />
-    <ClInclude Include="StepperControl.h" />
     <ClInclude Include="Timer.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="Planner.cpp" />
-    <ClCompile Include="StepperControl.cpp" />
     <ClCompile Include="Timer.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
