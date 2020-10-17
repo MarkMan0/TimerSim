@@ -156,6 +156,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="PointTests.cpp" />
     <ClCompile Include="RingBufferTests.cpp" />
     <ClCompile Include="TimerTests.cpp" />
   </ItemGroup>
