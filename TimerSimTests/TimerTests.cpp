@@ -43,6 +43,23 @@ namespace TimerSimTests {
 			Assert::AreEqual(1, val, L"val not 1");
 			Assert::AreEqual(static_cast<Timer::counter_t>(0), timer.getCounter(), L"Counter does not match expected");
 		}
+
+		TEST_METHOD(TestDifferentPSC_TH) {
+			val = 0;
+			Timer timer(incVal);
+			
+			const int th = 4, psc = 4;
+			timer.setPrescale(psc);
+			timer.setThreshold(th);
+
+			for (int i = 0; i < th * psc - 1; ++i) {
+				timer.tick();
+			}
+			Assert::AreEqual(0, val, L"val not 0");
+			timer.tick();
+			Assert::AreEqual(1, val, L"val not 1");
+			Assert::AreEqual(static_cast<Timer::counter_t>(0), timer.getCounter(), L"Counter does not match expected");
+		}
 	};
 
 };
