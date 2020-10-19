@@ -24,7 +24,10 @@
     <ClInclude Include="MotionPlanner.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Point.h">
+    <ClInclude Include="utils.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="MarlinTypes.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
