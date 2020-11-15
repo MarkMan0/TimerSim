@@ -143,15 +143,20 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="MarlinTypes.h" />
-    <ClInclude Include="MotionPlanner.h" />
+    <ClInclude Include="macros.h" />
+    <ClInclude Include="motion.h" />
+    <ClInclude Include="planner.h" />
+    <ClInclude Include="stepper.h" />
+    <ClInclude Include="types.h" />
     <ClInclude Include="utils.h" />
     <ClInclude Include="RingBuffer.h" />
     <ClInclude Include="Timer.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="MotionPlanner.cpp" />
+    <ClCompile Include="motion.cpp" />
+    <ClCompile Include="planner.cpp" />
+    <ClCompile Include="stepper.cpp" />
     <ClCompile Include="Timer.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
