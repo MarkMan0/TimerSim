@@ -201,20 +201,28 @@ void homeaxis(const AxisEnum axis);
  * Workspace offsets
  */
 
-#define NATIVE_TO_LOGICAL(POS, AXIS) (POS)
-#define LOGICAL_TO_NATIVE(POS, AXIS) (POS)
+template<typename T1, typename T2>
+constexpr auto NATIVE_TO_LOGICAL(T1 POS, T2  AXIS) { return (POS); }
+template<typename T1, typename T2>
+constexpr auto LOGICAL_TO_NATIVE(T1 POS, T2  AXIS) { return (POS); }
 inline void toLogical(xy_pos_t&) { }
 inline void toLogical(xyz_pos_t&) { }
 inline void toLogical(xyze_pos_t&) { }
 inline void toNative(xy_pos_t&) { }
 inline void toNative(xyz_pos_t&) { }
 inline void toNative(xyze_pos_t&) { }
-#define LOGICAL_X_POSITION(POS) NATIVE_TO_LOGICAL(POS, X_AXIS)
-#define LOGICAL_Y_POSITION(POS) NATIVE_TO_LOGICAL(POS, Y_AXIS)
-#define LOGICAL_Z_POSITION(POS) NATIVE_TO_LOGICAL(POS, Z_AXIS)
-#define RAW_X_POSITION(POS)     LOGICAL_TO_NATIVE(POS, X_AXIS)
-#define RAW_Y_POSITION(POS)     LOGICAL_TO_NATIVE(POS, Y_AXIS)
-#define RAW_Z_POSITION(POS)     LOGICAL_TO_NATIVE(POS, Z_AXIS)
+template<typename T>
+constexpr auto LOGICAL_X_POSITION(T POS) { return NATIVE_TO_LOGICAL(POS, X_AXIS); }
+template<typename T>
+constexpr auto LOGICAL_Y_POSITION(T POS) { return NATIVE_TO_LOGICAL(POS, Y_AXIS); }
+template<typename T>
+constexpr auto LOGICAL_Z_POSITION(T POS) { return NATIVE_TO_LOGICAL(POS, Z_AXIS); }
+template<typename T>
+constexpr auto RAW_X_POSITION(T POS) { return LOGICAL_TO_NATIVE(POS, X_AXIS); }
+template<typename T>
+constexpr auto RAW_Y_POSITION(T POS) { return LOGICAL_TO_NATIVE(POS, Y_AXIS); }
+template<typename T>
+constexpr auto RAW_Z_POSITION(T POS) { return LOGICAL_TO_NATIVE(POS, Z_AXIS); }
 
 /**
  * position_is_reachable family of functions

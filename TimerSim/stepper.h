@@ -80,7 +80,11 @@
 #define STEPPER_TIMER_RATE 2000000
 
   // S curve interpolation adds 40 cycles]
+#if S_CURVE_ACCELERATION
   #define ISR_S_CURVE_CYCLES 40UL
+#else
+#define ISR_S_CURVE_CYCLES 0UL
+#endif
 
 
   // Stepper Loop base cycles
@@ -171,16 +175,19 @@ class Stepper {
                     step_event_count;       // The total event count for the current block
 
       static constexpr uint8_t stepper_extruder = 0;
-
+#if S_CURVE_ACCELERATION
       static int32_t bezier_A,     // A coefficient in Bézier speed curve
                      bezier_B,     // B coefficient in Bézier speed curve
                      bezier_C;     // C coefficient in Bézier speed curve
       static uint32_t bezier_F,    // F coefficient in Bézier speed curve
                       bezier_AV;   // AV coefficient in Bézier speed curve
       static bool bezier_2nd_half; // If Bézier curve has been initialized or not
-
+#endif
 
     static int32_t ticks_nominal;
+#if !S_CURVE_ACCELERATION
+    static uint32_t acc_step_rate;
+#endif
     //
     // Exact steps at which an endstop was triggered
     //
@@ -284,9 +291,10 @@ class Stepper {
 
       return timer;
     }
-
+#if S_CURVE_ACCELERATION
       static void _calc_bezier_curve_coeffs(const int32_t v0, const int32_t v1, const uint32_t av);
       static int32_t _eval_bezier_curve(const uint32_t curr_step);
+#endif
 
 };
 

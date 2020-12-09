@@ -89,6 +89,7 @@
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp14</LanguageStandard>
+      <LanguageStandard_C>stdc11</LanguageStandard_C>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -147,6 +148,7 @@
     <ClInclude Include="motion.h" />
     <ClInclude Include="planner.h" />
     <ClInclude Include="stepper.h" />
+    <ClInclude Include="StepperSim.h" />
     <ClInclude Include="types.h" />
     <ClInclude Include="utils.h" />
     <ClInclude Include="RingBuffer.h" />
@@ -157,6 +159,7 @@
     <ClCompile Include="motion.cpp" />
     <ClCompile Include="planner.cpp" />
     <ClCompile Include="stepper.cpp" />
+    <ClCompile Include="StepperSim.cpp" />
     <ClCompile Include="Timer.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

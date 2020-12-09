@@ -62,6 +62,7 @@
   * was designed, written and tested by Eduardo José Tagle on April/2018
   */
 
+#include <iostream>
 #include "planner.h"
 #include "motion.h"
 #include "types.h"
@@ -141,9 +142,11 @@ void Planner::init() {
 // All other 32-bit MPUs can easily do inverse using hardware division,
 // so we don't need to reduce precision or to use assembly language at all.
 // This routine, for all other archs, returns 0x100000000 / d ~= 0xFFFFFFFF / d
+#if S_CURVE_ACCELERATION
 static uint32_t get_period_inverse(const uint32_t d) {
     return d ? 0xFFFFFFFF / d : 0xFFFFFFFF;
 }
+#endif
 
 #define MINIMAL_STEP_RATE 120
 
@@ -211,9 +214,9 @@ void Planner::calculate_trapezoid_for_block(block_t* const block, const float& e
 // Limit minimal step rate (Otherwise the timer will overflow.)
     NOLESS(initial_rate, uint32_t(MINIMAL_STEP_RATE));
     NOLESS(final_rate, uint32_t(MINIMAL_STEP_RATE));
-
+#if S_CURVE_ACCELERATION
     uint32_t cruise_rate = initial_rate;
-
+#endif
     const int32_t accel = block->acceleration_steps_per_s2;
 
     // Steps required for acceleration, deceleration to/from nominal rate
@@ -230,14 +233,17 @@ void Planner::calculate_trapezoid_for_block(block_t* const block, const float& e
         const float accelerate_steps_float = CEIL(intersection_distance(initial_rate, final_rate, accel, block->step_event_count));
         accelerate_steps = _MIN(uint32_t(_MAX(accelerate_steps_float, 0)), block->step_event_count);
         plateau_steps = 0;
-
+#if S_CURVE_ACCELERATION
         // We won't reach the cruising rate. Let's calculate the speed we will reach
         cruise_rate = final_speed(initial_rate, accel, accelerate_steps);
+#endif
     }
+#if S_CURVE_ACCELERATION
     else // We have some plateau time, so the cruise rate will be the nominal rate
         cruise_rate = block->nominal_rate;
+#endif
 
-
+#if S_CURVE_ACCELERATION
     // Jerk controlled speed requires to express speed versus time, NOT steps
     uint32_t acceleration_time = ((float)(cruise_rate - initial_rate) / accel) * (STEPPER_TIMER_RATE),
         deceleration_time = ((float)(cruise_rate - final_rate) / accel) * (STEPPER_TIMER_RATE);
@@ -245,17 +251,19 @@ void Planner::calculate_trapezoid_for_block(block_t* const block, const float& e
     // And to offload calculations from the ISR, we also calculate the inverse of those times here
     uint32_t acceleration_time_inverse = get_period_inverse(acceleration_time);
     uint32_t deceleration_time_inverse = get_period_inverse(deceleration_time);
+#endif
 
     // Store new block parameters
     block->accelerate_until = accelerate_steps;
     block->decelerate_after = accelerate_steps + plateau_steps;
     block->initial_rate = initial_rate;
+#if S_CURVE_ACCELERATION
     block->acceleration_time = acceleration_time;
     block->deceleration_time = deceleration_time;
     block->acceleration_time_inverse = acceleration_time_inverse;
     block->deceleration_time_inverse = deceleration_time_inverse;
     block->cruise_rate = cruise_rate;
-
+#endif
     block->final_rate = final_rate;
 }
 
@@ -894,6 +902,9 @@ bool Planner::_populate_block(block_t* const block, bool split_move,
     }
     block->acceleration_steps_per_s2 = accel;
     block->acceleration = accel / steps_per_mm;
+#if !S_CURVE_ACCELERATION 
+    block->acceleration_rate = (uint32_t)(accel * (4096.0f * 4096.0f / (STEPPER_TIMER_RATE)));
+#endif
 
     float vmax_junction_sqr; // Initial limit on the segment entry velocity (mm/s)^2
 

@@ -77,7 +77,11 @@
  * to avoid impacting ISR speed.
  */
 
+#include <iostream>
 #include "stepper.h"
+#include "Timer.h"
+#include "StepperSim.h"
+//#include <iostream>
 
 Stepper stepper; // Singleton
 
@@ -109,34 +113,43 @@ uint32_t Stepper::advance_divisor = 0,
 
 
 constexpr uint8_t Stepper::stepper_extruder;
-
+#if S_CURVE_ACCELERATION 
   int32_t  Stepper::bezier_A;    // A coefficient in Bézier speed curve with alias for assembler
   int32_t  Stepper::bezier_B;    // B coefficient in Bézier speed curve with alias for assembler
   int32_t  Stepper::bezier_C;    // C coefficient in Bézier speed curve with alias for assembler
   uint32_t  Stepper::bezier_F;   // F coefficient in Bézier speed curve with alias for assembler
   uint32_t  Stepper::bezier_AV; // AV coefficient in Bézier speed curve with alias for assembler
   bool Stepper::bezier_2nd_half;    // =false If Bézier curve has been initialized or not
+#endif
 
 
 int32_t Stepper::ticks_nominal = -1;
+#if !S_CURVE_ACCELERATION 
+uint32_t Stepper::acc_step_rate;
+#endif
 
 xyz_long_t Stepper::endstops_trigsteps;
 xyze_long_t Stepper::count_position{0};
 xyze_int8_t Stepper::count_direction{0};
 
 
-  #define X_APPLY_DIR(v,Q) X_DIR_WRITE(v)
-  #define X_APPLY_STEP(v,Q) X_STEP_WRITE(v)
+#define X_APPLY_STEP(v,Q) if(v) stepperX.apply_step()
+
+#define Y_APPLY_STEP(v,Q) if(v) stepperY.apply_step()
+
+#define Z_APPLY_STEP(v,Q) if(v) stepperZ.apply_step()
+
+#define E_APPLY_STEP(v,Q) if(v) stepperE0.apply_step()
 
 
-  #define Y_APPLY_DIR(v,Q) Y_DIR_WRITE(v)
-  #define Y_APPLY_STEP(v,Q) Y_STEP_WRITE(v)
+  //#define Y_APPLY_DIR(v,Q) Y_DIR_WRITE(v)
+  //#define Y_APPLY_STEP(v,Q) Y_STEP_WRITE(v)
 
 
-  #define Z_APPLY_DIR(v,Q) Z_DIR_WRITE(v)
-  #define Z_APPLY_STEP(v,Q) Z_STEP_WRITE(v)
+  //#define Z_APPLY_DIR(v,Q) Z_DIR_WRITE(v)
+  //#define Z_APPLY_STEP(v,Q) Z_STEP_WRITE(v)
 
-  #define E_APPLY_STEP(v,Q) E_STEP_WRITE(stepper_extruder, v)
+  //#define E_APPLY_STEP(v,Q) E_STEP_WRITE(stepper_extruder, v)
 
 #define CYCLES_TO_NS(CYC) (1000UL * (CYC) / ((F_CPU) / 1000000))
 constexpr uint32_t NS_PER_PULSE_TIMER_TICK = 1000000000UL / (STEPPER_TIMER_RATE);
@@ -149,8 +162,8 @@ constexpr uint32_t NS_TO_PULSE_TIMER_TICKS(uint32_t NS) { return (NS + (NS_PER_P
 #define PULSE_HIGH_TICK_COUNT hal_timer_t(NS_TO_PULSE_TIMER_TICKS(_MIN_PULSE_HIGH_NS - _MIN(_MIN_PULSE_HIGH_NS, TIMER_SETUP_NS)))
 #define PULSE_LOW_TICK_COUNT hal_timer_t(NS_TO_PULSE_TIMER_TICKS(_MIN_PULSE_LOW_NS - _MIN(_MIN_PULSE_LOW_NS, TIMER_SETUP_NS)))
 
-static int HAL_timer_get_count(int i) {
-    return 10;
+static uint32_t HAL_timer_get_count(int i) {
+    return stepper_timer.getCounter();
 }
 
 #define USING_TIMED_PULSE() hal_timer_t start_pulse_count = 0
@@ -175,12 +188,28 @@ static int HAL_timer_get_count(int i) {
 
 void Stepper::SET_STEP_DIR(AxisEnum ax) {
     if (motor_direction(ax) ) {
-        //A##_APPLY_DIR(INVERT_##A##_DIR, false);   
+        if (ax == X_AXIS) {
+            stepperX.set_dir(1);
+        }
+        if (ax == Y_AXIS) {
+            stepperY.set_dir(1);
+        }
+        if (ax == Z_AXIS) {
+            stepperZ.set_dir(1);
+        }
         count_direction[_AXIS(A)] = -1;           
     }                                           
     else {                                      
-      //A##_APPLY_DIR(!INVERT_##A##_DIR, false);  
-      count_direction[_AXIS(A)] = 1;            
+        if (ax == X_AXIS) {
+            stepperX.set_dir(0);
+        }
+        if (ax == Y_AXIS) {
+            stepperY.set_dir(0);
+        }
+        if (ax == Z_AXIS) {
+            stepperZ.set_dir(0);
+        }
+        count_direction[_AXIS(A)] = 1;            
     }
 }
 
@@ -437,6 +466,7 @@ void Stepper::set_directions() {
    */
 
     // For all the other 32bit CPUs
+#if S_CURVE_ACCELERATION 
     void Stepper::_calc_bezier_curve_coeffs(const int32_t v0, const int32_t v1, const uint32_t av) {
       // Calculate the Bézier coefficients
       bezier_A =  768 * (v1 - v0);
@@ -511,13 +541,16 @@ void Stepper::set_directions() {
 
       #endif
     }
+#endif
 
 /**
  * Stepper Driver Interrupt
  *
  * Directly pulses the stepper motors at high frequency.
  */
-
+static inline uint32_t MultiU32X24toH32(uint32_t longIn1, uint32_t longIn2) {
+    return ((uint64_t)longIn1 * longIn2 + 0x00800000) >> 24;
+}
 #define STEP_MULTIPLY(A,B) MultiU32X24toH32(A, B)
 
 
@@ -532,7 +565,7 @@ void Stepper::isr() {
   
   //TODO:
   //HAL_timer_set_compare(STEP_TIMER_NUM, hal_timer_t(HAL_TIMER_TYPE_MAX));
-
+  stepper_timer.setThreshold(0xFFFFFF);
   // Count of ticks for the next ISR
   hal_timer_t next_isr_ticks = 0;
 
@@ -606,13 +639,13 @@ void Stepper::isr() {
      * On AVR the ISR epilogue+prologue is estimated at 100 instructions - Give 8µs as margin
      * On ARM the ISR epilogue+prologue is estimated at 20 instructions - Give 1µs as margin
      */
-    /*TODO
+    /*
     min_ticks = HAL_timer_get_count(STEP_TIMER_NUM) + hal_timer_t(
         1
-      * (STEPPER_TIMER_TICKS_PER_US)
+      * (STEPPER_TIMER_RATE/1000000)
     );
     */
-    min_ticks = 8;
+    min_ticks = stepper_timer.getCounter() + static_cast<uint32_t>(STEPPER_TIMER_RATE / 1000000);
 
     /**
      * NB: If for some reason the stepper monopolizes the MPU, eventually the
@@ -629,12 +662,13 @@ void Stepper::isr() {
   // sure that the time has not arrived yet - Warrantied by the scheduler
 
   // Set the next ISR to fire at the proper time
-  //TODO HAL_timer_set_compare(STEP_TIMER_NUM, hal_timer_t(next_isr_ticks));
+  // HAL_timer_set_compare(STEP_TIMER_NUM, hal_timer_t(next_isr_ticks));
+  stepper_timer.setThreshold(next_isr_ticks);
 
 }
 
 #define ISR_PULSE_CONTROL (MINIMUM_STEPPER_PULSE || MAXIMUM_STEPPER_RATE)
-#define ISR_MULTI_STEPS (ISR_PULSE_CONTROL)
+#define ISR_MULTI_STEPS (ISR_PULSE_CONTROL && 0)
 
 /**
  * This phase of the ISR should ONLY create the pulses for the steppers.
@@ -673,8 +707,9 @@ void Stepper::pulse_phase_isr() {
   xyze_bool_t step_needed{0};
 
   do {
-    #define _APPLY_STEP(AXIS, INV, ALWAYS) //TODO
-    #define _INVERT_STEP_PIN(AXIS)
+    //auto _APPLY_STEP = [](int a, int b, int c) {std::cout << std::string("Apply step: "); }
+    #define _APPLY_STEP(AXIS, INV, ALWAYS)  AXIS ##_APPLY_STEP(INV, ALWAYS)
+    #define _INVERT_STEP_PIN(AXIS) 0
 
     // Determine if a pulse is needed using Bresenham
     #define PULSE_PREP(AXIS) do{ \
@@ -689,14 +724,14 @@ void Stepper::pulse_phase_isr() {
     // Start an active pulse, if Bresenham says so, and update position
     #define PULSE_START(AXIS) do{ \
       if (step_needed[_AXIS(AXIS)]) { \
-        _APPLY_STEP(AXIS, !_INVERT_STEP_PIN(AXIS), 0); \
+        _APPLY_STEP(AXIS, 1, 0); \
       } \
     }while(0)
 
     // Stop an active pulse, if any, and adjust error term
     #define PULSE_STOP(AXIS) do { \
       if (step_needed[_AXIS(AXIS)]) { \
-        _APPLY_STEP(AXIS, _INVERT_STEP_PIN(AXIS), 0); \
+        _APPLY_STEP(AXIS, 0, 0); \
       } \
     }while(0)
 
@@ -715,7 +750,7 @@ void Stepper::pulse_phase_isr() {
       PULSE_START(X);
       PULSE_START(Y);
       PULSE_START(Z);
-        PULSE_START(E);
+      PULSE_START(E);
 
     // TODO: need to deal with MINIMUM_STEPPER_PULSE over i2s
     #if ISR_MULTI_STEPS
@@ -760,10 +795,15 @@ uint32_t Stepper::block_phase_isr() {
       if (step_events_completed <= accelerate_until) { // Calculate new timer value
 
           // Get the next speed to use (Jerk limited!)
+#if S_CURVE_ACCELERATION 
           uint32_t acc_step_rate =
             acceleration_time < current_block->acceleration_time
               ? _eval_bezier_curve(acceleration_time)
               : current_block->cruise_rate;
+#else
+          acc_step_rate = STEP_MULTIPLY(acceleration_time, current_block->acceleration_rate) + current_block->initial_rate;
+          NOMORE(acc_step_rate, current_block->nominal_rate);
+#endif
 
         // acc_step_rate is in steps/second
 
@@ -777,6 +817,7 @@ uint32_t Stepper::block_phase_isr() {
         uint32_t step_rate;
 
           // If this is the 1st time we process the 2nd half of the trapezoid...
+#if S_CURVE_ACCELERATION 
           if (!bezier_2nd_half) {
             // Initialize the Bézier speed curve
             _calc_bezier_curve_coeffs(current_block->cruise_rate, current_block->final_rate, current_block->deceleration_time_inverse);
@@ -790,6 +831,16 @@ uint32_t Stepper::block_phase_isr() {
               ? _eval_bezier_curve(deceleration_time)
               : current_block->final_rate;
           }
+#else
+                  // Using the old trapezoidal control
+        step_rate = STEP_MULTIPLY(deceleration_time, current_block->acceleration_rate);
+        if (step_rate < acc_step_rate) { // Still decelerating?
+            step_rate = acc_step_rate - step_rate;
+            NOLESS(step_rate, current_block->final_rate);
+        }
+        else
+            step_rate = current_block->final_rate;
+#endif
 
         // step_rate is in steps/second
 
@@ -881,12 +932,15 @@ uint32_t Stepper::block_phase_isr() {
 
       // Mark the time_nominal as not calculated yet
       ticks_nominal = -1;
-
+#if !S_CURVE_ACCELERATION
+      acc_step_rate = current_block->initial_rate;
+#endif
+#if S_CURVE_ACCELERATION 
         // Initialize the Bézier speed curve
         _calc_bezier_curve_coeffs(current_block->initial_rate, current_block->cruise_rate, current_block->acceleration_time_inverse);
         // We haven't started the 2nd half of the trapezoid
         bezier_2nd_half = false;
-
+#endif
       // Calculate the initial timer interval
       interval = calc_timer_interval(current_block->initial_rate, &steps_per_isr);
     }
@@ -909,7 +963,8 @@ bool Stepper::is_block_busy(const block_t* const block) {
 }
 
 void Stepper::init() {
-    //TODO HAL_timer_start(STEP_TIMER_NUM, 122); // Init Stepper ISR to 122 Hz for quick starting
+    // HAL_timer_start(STEP_TIMER_NUM, 122); // Init Stepper ISR to 122 Hz for quick starting
+    timer_start(stepper_timer, 122);
     wake_up();
 
   // Init direction bits for first moves

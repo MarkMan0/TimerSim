@@ -26,6 +26,7 @@
 
 
 
+#include <iostream>
 #include "motion.h"
 #include "planner.h"
 
@@ -214,7 +215,7 @@ void do_blocking_move_to(const float rx, const float ry, const float rz, const f
         line_to_current_position(z_feedrate);
     }
 
-    planner.synchronize();
+    //planner.synchronize();
 }
 
 void do_blocking_move_to(const xy_pos_t& raw, const feedRate_t& fr_mm_s/*=0.0f*/) {
